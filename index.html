@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robomy Lock</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; text-align: center; }
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+        button { width: 100%; padding: 10px; margin-top: 10px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:disabled { background: #ccc; }
+        .hidden { display: none; }
+        #status { margin-top: 20px; font-size: 14px; color: #555; }
+    </style>
+</head>
+<body>
+
+    <!-- LOGIN FORM -->
+    <div id="loginSection" class="container">
+        <h2>Robomy Login</h2>
+        <input type="email" id="email" placeholder="Email (e.g. user@gmail.com)">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <p id="loginError" style="color:red; font-size:12px;"></p>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboardSection" class="container hidden">
+        <h2>Robomy Dashboard</h2>
+        <div id="status">Loading status...</div>
+        <button onclick="unlockDoor()">🔓 Unlock Door (5s)</button>
+        <button onclick="logout()" style="background:#555; margin-top:5px;">Logout</button>
+    </div>
+
+    <!-- FIREBASE SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        // PASTE YOUR CONFIG FROM FIREBASE CONSOLE HERE
+        // Example (DO NOT COPY THESE SPECIFIC KEYS, USE YOURS):
+        const firebaseConfig = {
+            apiKey: "AIzaSyBJWwCztqYRCvma4JYq-Z_hiWBdcp_It7s",
+            authDomain: "robomy-locking-epan.firebaseapp.com",
+            databaseURL: "https://robomy-locking-epan-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "robomy-locking-epan",
+            storageBucket: "robomy-locking-epan.firebasestorage.app",
+            messagingSenderId: "71119169858",
+            appId: "1:71119169858:web:78e2a0f217edce60e880db"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        const DEVICE_ID = "robomy_raspi5_door";
+
+        // Check Login State
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('dashboardSection').classList.remove('hidden');
+                listenToStatus();
+            } else {
+                document.getElementById('loginSection').classList.remove('hidden');
+                document.getElementById('dashboardSection').classList.add('hidden');
+            }
+        });
+
+        // Functions
+        function login() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            auth.signInWithEmailAndPassword(email, pass)
+                .catch(err => document.getElementById('loginError').innerText = err.message);
+        }
+
+        function logout() {
+            auth.signOut();
+        }
+
+        function listenToStatus() {
+            db.ref(`/devices/${DEVICE_ID}/status`).on('value', snapshot => {
+                const status = snapshot.val();
+                const div = document.getElementById('status');
+                if (status) {
+                    div.innerText = `Status: ${JSON.stringify(status)}`;
+                }
+            });
+        }
+
+        function unlockDoor() {
+            const cmdId = "web_" + Math.random().toString(36).substring(7);
+            const payload = {
+                cmd: "UNLOCK",
+                duration_s: 5,
+                cmd_id: cmdId,
+                issued_by: auth.currentUser.email,
+                issued_via: "WEB",
+                issued_at: Date.now()
+            };
+
+            db.ref(`/devices/${DEVICE_ID}/command`).set(payload)
+                .then(() => {
+                    alert("Command Sent!");
+                    // Log to Firebase too
+                    db.ref(`/devices/${DEVICE_ID}/logs`).push({ ...payload, event: "CMD_ISSUED" });
+                })
+                .catch(err => alert("Error: " + err.message));
+        }
+    </script>
+</body>
+</html>
