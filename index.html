@@ -69,7 +69,12 @@
             }
         });
 
+        // PASTE THE URL YOU GOT FROM STEP 1 HERE
+        const LOGGER_URL = "https://script.google.com/macros/s/AKfycbyDpXJ_Ecle0SYjEvJddqfwEz0q1naYm9Bj6-QGj-fZyyKRlGpZ0_5dYSm5IwcMInDC9Q/exec"; 
+
         // Functions
+        
+        
         function login() {
             const email = document.getElementById('email').value;
             const pass = document.getElementById('password').value;
@@ -79,6 +84,27 @@
 
         function logout() {
             auth.signOut();
+        }
+
+        function logToGoogleSheet(event, details) {
+          // We use 'no-cors' mode because Google Scripts don't support CORS perfectly for browser requests.
+          // This allows the request to be sent even if we don't get a response back.
+          
+          const payload = {
+            event: event,
+            who: auth.currentUser.email,
+            via: "WEB",
+            details: details
+          };
+        
+          fetch(LOGGER_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: {
+              "Content-Type": "text/plain" // Use text/plain to avoid preflight checks
+            },
+            body: JSON.stringify(payload)
+          }).catch(err => console.error("Logging failed", err));
         }
 
         function listenToStatus() {
@@ -101,12 +127,16 @@
                 issued_via: "WEB",
                 issued_at: Date.now()
             };
-
+        
             db.ref(`/devices/${DEVICE_ID}/command`).set(payload)
                 .then(() => {
                     alert("Command Sent!");
-                    // Log to Firebase too
+                    
+                    // 1. Log to Firebase
                     db.ref(`/devices/${DEVICE_ID}/logs`).push({ ...payload, event: "CMD_ISSUED" });
+                    
+                    // 2. Log to Google Sheet
+                    logToGoogleSheet("CMD_ISSUED", "cmd_id=" + cmdId);
                 })
                 .catch(err => alert("Error: " + err.message));
         }
